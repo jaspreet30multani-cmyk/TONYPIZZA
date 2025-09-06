@@ -1,0 +1,262 @@
+import React, { useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { Minus, Plus, ShoppingCart } from "lucide-react";
+
+const SIZES = [
+  { name: "Small", size: "10\"", multiplier: 1 },
+  { name: "Medium", size: "12\"", multiplier: 1.4 },
+  { name: "Large", size: "14\"", multiplier: 1.8 },
+  { name: "Extra Large", size: "16\"", multiplier: 2.2 }
+];
+
+const CRUSTS = [
+  { name: "Traditional", description: "Classic hand-tossed", price: 0 },
+  { name: "Thin & Crispy", description: "Light and crispy", price: 0 },
+  { name: "Thick Pan", description: "Deep dish style", price: 2 },
+  { name: "Stuffed Crust", description: "Cheese-filled crust", price: 3 }
+];
+
+const TOPPINGS = [
+  { name: "Pepperoni", price: 2.50 },
+  { name: "Italian Sausage", price: 2.50 },
+  { name: "Mushrooms", price: 1.50 },
+  { name: "Bell Peppers", price: 1.50 },
+  { name: "Red Onions", price: 1.50 },
+  { name: "Black Olives", price: 2.00 },
+  { name: "Extra Cheese", price: 2.00 },
+  { name: "Fresh Basil", price: 1.50 },
+  { name: "Tomatoes", price: 1.50 },
+  { name: "Spinach", price: 1.50 },
+  { name: "Pineapple", price: 2.00 },
+  { name: "Jalapeños", price: 1.50 }
+];
+
+export default function PizzaCustomizer({ pizza, isOpen, onClose, onAddToCart }) {
+  const [selectedSize, setSelectedSize] = useState(SIZES[1]);
+  const [selectedCrust, setSelectedCrust] = useState(CRUSTS[0]);
+  const [selectedToppings, setSelectedToppings] = useState([]);
+  const [quantity, setQuantity] = useState(1);
+  const [specialInstructions, setSpecialInstructions] = useState("");
+
+  const calculatePrice = () => {
+    if (!pizza) return 0;
+    
+    const basePrice = pizza.base_price * selectedSize.multiplier;
+    const crustPrice = selectedCrust.price;
+    const toppingsPrice = selectedToppings.reduce((sum, topping) => sum + topping.price, 0);
+    
+    return (basePrice + crustPrice + toppingsPrice) * quantity;
+  };
+
+  const toggleTopping = (topping) => {
+    setSelectedToppings(prev => {
+      const exists = prev.find(t => t.name === topping.name);
+      if (exists) {
+        return prev.filter(t => t.name !== topping.name);
+      } else {
+        return [...prev, topping];
+      }
+    });
+  };
+
+  const handleAddToCart = () => {
+    const cartItem = {
+      id: `${pizza.id}-${Date.now()}`,
+      menu_item_id: pizza.id,
+      name: pizza.name,
+      quantity,
+      size: selectedSize.name,
+      crust: selectedCrust.name,
+      toppings: selectedToppings.map(t => t.name),
+      price: calculatePrice(),
+      special_instructions: specialInstructions,
+      image_url: pizza.image_url
+    };
+
+    onAddToCart(cartItem);
+    onClose();
+    
+    // Reset form
+    setSelectedSize(SIZES[1]);
+    setSelectedCrust(CRUSTS[0]);
+    setSelectedToppings([]);
+    setQuantity(1);
+    setSpecialInstructions("");
+  };
+
+  if (!pizza) return null;
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-2xl font-bold flex items-center gap-2">
+            Customize Your {pizza.name}
+            <Badge className="bg-red-100 text-red-800">
+              ${calculatePrice().toFixed(2)}
+            </Badge>
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="grid md:grid-cols-2 gap-6">
+          {/* Left Column - Pizza Image and Description */}
+          <div>
+            {pizza.image_url && (
+              <img
+                src={pizza.image_url}
+                alt={pizza.name}
+                className="w-full h-64 object-cover rounded-lg mb-4"
+              />
+            )}
+            <p className="text-gray-600 mb-4">{pizza.description}</p>
+            
+            {/* Base Ingredients */}
+            {pizza.ingredients && (
+              <div className="mb-6">
+                <h3 className="font-semibold mb-2">Base Ingredients:</h3>
+                <div className="flex flex-wrap gap-2">
+                  {pizza.ingredients.map((ingredient) => (
+                    <Badge key={ingredient} variant="outline">
+                      {ingredient}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Right Column - Customization Options */}
+          <div className="space-y-6">
+            {/* Size Selection */}
+            <div>
+              <h3 className="font-semibold mb-3 text-lg">Choose Size</h3>
+              <div className="grid grid-cols-2 gap-3">
+                {SIZES.map((size) => (
+                  <Card
+                    key={size.name}
+                    className={`cursor-pointer transition-all duration-200 ${
+                      selectedSize.name === size.name
+                        ? "ring-2 ring-red-500 bg-red-50"
+                        : "hover:bg-gray-50"
+                    }`}
+                    onClick={() => setSelectedSize(size)}
+                  >
+                    <CardContent className="p-3">
+                      <div className="text-center">
+                        <div className="font-semibold">{size.name}</div>
+                        <div className="text-sm text-gray-600">{size.size}</div>
+                        <div className="text-sm font-medium text-red-600">
+                          ${(pizza.base_price * size.multiplier).toFixed(2)}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+
+            {/* Crust Selection */}
+            <div>
+              <h3 className="font-semibold mb-3 text-lg">Choose Crust</h3>
+              <div className="space-y-2">
+                {CRUSTS.map((crust) => (
+                  <Card
+                    key={crust.name}
+                    className={`cursor-pointer transition-all duration-200 ${
+                      selectedCrust.name === crust.name
+                        ? "ring-2 ring-red-500 bg-red-50"
+                        : "hover:bg-gray-50"
+                    }`}
+                    onClick={() => setSelectedCrust(crust)}
+                  >
+                    <CardContent className="p-3">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <div className="font-semibold">{crust.name}</div>
+                          <div className="text-sm text-gray-600">{crust.description}</div>
+                        </div>
+                        <div className="text-sm font-medium text-red-600">
+                          {crust.price > 0 ? `+$${crust.price.toFixed(2)}` : "Free"}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+
+            {/* Toppings Selection */}
+            <div>
+              <h3 className="font-semibold mb-3 text-lg">Add Toppings</h3>
+              <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto">
+                {TOPPINGS.map((topping) => {
+                  const isSelected = selectedToppings.find(t => t.name === topping.name);
+                  return (
+                    <Card
+                      key={topping.name}
+                      className={`cursor-pointer transition-all duration-200 ${
+                        isSelected
+                          ? "ring-2 ring-red-500 bg-red-50"
+                          : "hover:bg-gray-50"
+                      }`}
+                      onClick={() => toggleTopping(topping)}
+                    >
+                      <CardContent className="p-3">
+                        <div className="flex justify-between items-center">
+                          <span className="font-medium">{topping.name}</span>
+                          <span className="text-sm font-medium text-red-600">
+                            +${topping.price.toFixed(2)}
+                          </span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Quantity and Add to Cart */}
+            <div className="space-y-4">
+              <div>
+                <h3 className="font-semibold mb-2 text-lg">Quantity</h3>
+                <div className="flex items-center gap-4">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                  >
+                    <Minus className="w-4 h-4" />
+                  </Button>
+                  <span className="text-xl font-semibold min-w-8 text-center">{quantity}</span>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setQuantity(quantity + 1)}
+                  >
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+
+              <Button
+                onClick={handleAddToCart}
+                className="w-full bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-600 hover:to-orange-600 text-white text-lg py-3"
+              >
+                <ShoppingCart className="w-5 h-5 mr-2" />
+                Add to Cart - ${calculatePrice().toFixed(2)}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}

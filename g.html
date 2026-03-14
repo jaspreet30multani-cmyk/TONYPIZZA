@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Wii Trouble - Multiplayer Update</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        body { margin: 0; background: #111; display: flex; flex-direction: column; align-items: center; color: white; font-family: 'Segoe UI', sans-serif; user-select: none; overflow: hidden; }
+        
+        /* MENU STYLES */
+        .overlay { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 10; }
+        h1 { font-size: 64px; margin-bottom: 10px; text-shadow: 0 0 20px rgba(255,255,255,0.5); text-align: center; }
+        h2 { margin-bottom: 10px; color: #aaa; font-size: 20px; text-align: center; border-bottom: 2px solid #444; padding-bottom: 5px; }
+        
+        .btn { background: #333; color: white; border: 4px solid #555; padding: 15px 40px; font-size: 24px; margin: 10px; cursor: pointer; border-radius: 8px; transition: 0.2s; font-weight: bold; width: 320px; }
+        .btn:hover { background: #555; transform: scale(1.05); border-color: #fff; }
+        .btn:disabled { background: #222; color: #555; border-color: #333; cursor: not-allowed; transform: none; }
+        
+        .btn-passive { border-color: #44aa44; } .btn-passive:hover { background: #225522; }
+        .btn-active { border-color: #dd8822; } .btn-active:hover { background: #664411; }
+        .btn-aggro { border-color: #dd3333; } .btn-aggro:hover { background: #661111; }
+        
+        .btn-settings { border-color: #777; background: #222; } 
+        .btn-settings:hover:not(:disabled) { background: #444; border-color: #fff; }
+        
+        .corner-btn { position: absolute; top: 20px; right: 20px; width: 60px; height: 60px; padding: 0; font-size: 32px; border-radius: 12px; z-index: 100; margin: 0; display: flex; justify-content: center; align-items: center; }
+        
+        .btn-small { font-size: 16px; padding: 8px 20px; width: 140px; margin-top: 15px; }
+        .btn-micro { font-size: 13px; padding: 6px 10px; width: 100%; margin-top: 8px; border-width: 2px; }
+
+        /* MULTIPLAYER LOBBY STYLES */
+        .lobby-box { background: #1a1a1a; padding: 20px 40px; border-radius: 12px; border: 3px solid #444; text-align: center; margin-bottom: 20px; width: 400px; }
+        .room-id { font-family: monospace; font-size: 32px; color: #0088ff; background: #000; padding: 10px; border-radius: 8px; letter-spacing: 2px; margin: 10px 0; cursor: pointer; user-select: all; }
+        .player-list { list-style: none; padding: 0; margin: 15px 0; text-align: left; }
+        .player-list li { font-size: 20px; padding: 8px; border-bottom: 1px solid #333; color: #ccc; }
+        .player-list li.ready { color: #00cc44; font-weight: bold; }
+        #joinInput { font-size: 24px; padding: 10px; text-align: center; font-family: monospace; text-transform: uppercase; width: 280px; margin-bottom: 15px; border-radius: 8px; border: 2px solid #555; background: #111; color: white; }
+
+        /* SETTINGS MENU STYLES */
+        .settings-container { display: flex; gap: 30px; background: #222; padding: 25px; border-radius: 12px; border: 4px solid #555; max-height: 95vh; overflow-y: auto; max-width: 98vw; flex-wrap: wrap; justify-content: center; }
+        .settings-col { display: flex; flex-direction: column; gap: 12px; width: 260px; }
+        label { font-size: 16px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
+        
+        input[type="text"], .btn-color { width: 100px; padding: 4px; background: #111; color: #fff; border: 2px solid #555; text-align: center; border-radius: 4px; cursor: pointer; font-weight: bold; transition: 0.2s; font-family: inherit; font-size: 13px; }
+        input[type="text"]:hover, .btn-color:hover { border-color: #0088ff; }
+        
+        input[type="range"] { width: 120px; cursor: pointer; }
+        input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; accent-color: #dd3333; margin: 0; }
+        
+        .btn-row { display: flex; gap: 15px; margin-top: 10px; justify-content: center; }
+
+        /* PLAYER CONTROL CARDS */
+        .player-card { display: flex; flex-direction: column; gap: 8px; width: 230px; box-sizing: border-box; background: #1a1a1a; padding: 15px 20px; border-radius: 12px; border: 2px solid #333; box-shadow: inset 0 0 10px rgba(0,0,0,0.5), 0 4px 8px rgba(0,0,0,0.3); }
+        .player-card h2 { margin-top: 0; margin-bottom: 5px; font-size: 22px; border-bottom: 2px solid #333; padding-bottom: 6px; text-shadow: 1px 1px 2px black; }
+        .player-card label { font-size: 15px; color: #ccc; }
+        .player-card input[type="text"] { width: 110px; padding: 6px; font-size: 14px; background: #111; border: 2px solid #555; }
+        .player-card .rot-label { border-top: 2px solid #333; padding-top: 12px; margin-top: 4px; color: white; font-weight: bold; }
+
+        /* KEYBOARD MAP STYLES */
+        .keyboard-wrapper { width: 100%; display: flex; flex-direction: column; align-items: center; margin-top: 15px; }
+        #keyboardRenderArea { display: flex; justify-content: center; align-items: flex-start; gap: 20px; background: #1a1a1a; padding: 15px; border-radius: 12px; border: 3px solid #444; box-shadow: inset 0 0 20px rgba(0,0,0,0.8); transform: scale(0.85); transform-origin: top center; margin-bottom: -35px; }
+        .keyboard-section { display: flex; flex-direction: column; gap: 0; }
+        .keyboard-row { display: flex; justify-content: flex-start; gap: 4px; margin-bottom: 4px; }
+        .key-box { background: #333; border: 2px solid #555; border-radius: 4px; font-size: 13px; font-weight: bold; width: 38px; height: 38px; display: flex; justify-content: center; align-items: center; flex-direction: column; text-align: center; line-height: 1.1; color: white; text-shadow: 1px 1px 2px black; box-shadow: 0 4px 6px rgba(0,0,0,0.5), inset 0 1px 2px rgba(255,255,255,0.2); cursor: pointer; transition: 0.1s; position: relative; box-sizing: border-box; }
+        .key-box:active { box-shadow: 0 1px 2px rgba(0,0,0,0.5); transform: translateY(2px); }
+        .key-box:hover, .key-box.key-hover { transform: scale(1.1); box-shadow: 0 0 15px rgba(255,255,255,0.5); z-index: 5; border-color: #0088ff; }
+        
+        .k-backspace { width: 84px; } .k-tab { width: 60px; } .k-caps { width: 72px; font-size: 11px; } .k-shift-l { width: 50px; } .k-shift-r { width: 114px; } .k-ctrl { width: 50px; } .k-mod { width: 44px; } .k-space { width: 282px; }
+
+        .k-enter-top { width: 62px; height: 42px; margin-bottom: -4px; border-bottom-color: transparent; border-radius: 4px 4px 0 0; z-index: 2; align-items: flex-start; padding-top: 8px; }
+        .k-enter-top::after { content: ''; position: absolute; bottom: 0; left: 0; width: 14px; height: 2px; background: #555; }
+        .k-enter-top.bound-key::after { background: white; }
+        .k-enter-top.key-hover::after, .k-enter-top:hover::after { background: #0088ff; }
+        .k-enter-bot { width: 50px; height: 38px; border-top-color: transparent; border-radius: 0 0 4px 4px; }
+        .k-enter-top:hover, .k-enter-top.key-hover, .k-enter-bot:hover, .k-enter-bot.key-hover { transform: none !important; border-color: #0088ff; background: #444; box-shadow: 0 0 15px rgba(0,136,255,0.5); z-index: 5; }
+        
+        .numpad-grid { display: grid; grid-template-columns: repeat(4, 38px); grid-template-rows: repeat(5, 38px); gap: 4px; }
+        .numpad-grid .key-box { width: 100%; height: 100%; margin: 0; }
+        .k-num-plus { grid-column: 4; grid-row: 2 / span 2; }
+        .k-num-enter { grid-column: 4; grid-row: 4 / span 2; }
+        .k-num-zero { grid-column: 1 / span 2; justify-content: flex-start; padding-left: 12px; }
+        .key-empty { visibility: hidden; pointer-events: none; border: none; background: transparent; box-shadow: none; }
+        #bindInstruction { color: #0088ff; font-weight: bold; min-height: 24px; margin-bottom: 5px; font-size: 18px; }
+
+        /* GAME STYLES */
+        #gameContainer { display: none; z-index: 1; }
+        #gameContainer.map-fullscreen { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; overflow: hidden; background: #eaeaea; }
+        #gameContainer.map-fullscreen canvas { width: 100%; height: 100%; object-fit: fill; border: none; border-radius: 0; box-shadow: none; margin: 0; display: block; }
+        #gameContainer.map-fullscreen .ui { display: none; }
+        #gameContainer.map-fixed { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #111; }
+        #gameContainer.map-fixed canvas { background: #eaeaea; border: 8px solid #444; border-radius: 8px; box-shadow: 0 0 30px rgba(0,0,0,0.8); width: 1200px; height: 800px; max-width: 95vw; max-height: 80vh; object-fit: contain; }
+        #gameContainer.map-fixed .ui { position: absolute; top: 20px; width: 100%; max-width: 1200px; display: flex; justify-content: space-around; align-items: center; font-weight: bold; font-size: 24px; z-index: 5; pointer-events: none; text-shadow: 2px 2px 6px rgba(0,0,0,0.8); }
+    </style>
+</head>
+<body>
+
+    <button id="cornerSettingsBtn" class="btn btn-settings corner-btn" onclick="showSettingsMenu('main')" style="display:none;">⚙️</button>
+
+    <div id="rootMenu" class="overlay">
+        <h1>WII TROUBLE</h1>
+        <button class="btn btn-active" onclick="showMenu('mainMenu')">Play Local</button>
+        <button class="btn btn-passive" onclick="showMenu('multiplayerMenu')">Play Online</button>
+        <button class="btn btn-settings" onclick="showSettingsMenu('root')">⚙️ Global Settings</button>
+    </div>
+
+    <div id="mainMenu" class="overlay" style="display: none;">
+        <h1>LOCAL PLAY</h1>
+        <button class="btn" onclick="showDifficultyMenu()">1 Player vs Bot</button>
+        <button class="btn" onclick="startLocalGame('2')">2 Players Local</button>
+        <button class="btn" onclick="startLocalGame('3')">3 Players Local</button>
+        <button class="btn" onclick="startLocalGame('4')">4 Players Local</button>
+        <button class="btn btn-back btn-small" onclick="showMenu('rootMenu')">← Back</button>
+    </div>
+
+    <div id="diffMenu" class="overlay" style="display: none;">
+        <h1>SELECT DIFFICULTY</h1>
+        <button class="btn btn-passive" onclick="startLocalGame('bot-passive')">Passive (Target Practice)</button>
+        <button class="btn btn-active" onclick="startLocalGame('bot-active')">Active (Normal)</button>
+        <button class="btn btn-aggro" onclick="startLocalGame('bot-aggressive')">Aggressive (Hard)</button>
+        <button class="btn btn-back btn-small" onclick="showMenu('mainMenu')">← Back</button>
+    </div>
+
+    <div id="multiplayerMenu" class="overlay" style="display: none;">
+        <h1>ONLINE MULTIPLAYER</h1>
+        <button class="btn btn-active" onclick="hostRoom()">Create Room (Host)</button>
+        <button class="btn btn-passive" onclick="showMenu('joinMenu')">Join Room</button>
+        <button class="btn btn-back btn-small" onclick="showMenu('rootMenu')">← Back</button>
+    </div>
+
+    <div id="joinMenu" class="overlay" style="display: none;">
+        <h1>JOIN ROOM</h1>
+        <input type="text" id="joinInput" placeholder="Enter Room ID" autocomplete="off" spellcheck="false">
+        <button class="btn btn-passive" onclick="joinRoom()">Connect</button>
+        <div id="joinStatus" style="color:#ff3333; margin-top:10px; font-weight:bold; min-height: 20px;"></div>
+        <button class="btn btn-back btn-small" onclick="showMenu('multiplayerMenu')">← Back</button>
+    </div>
+
+    <div id="lobbyMenu" class="overlay" style="display: none;">
+        <h1>GAME LOBBY</h1>
+        <div class="lobby-box">
+            <h2 id="lobbyRoleText">Host</h2>
+            <div style="font-size:14px; color:#aaa;">ROOM ID (Share this):</div>
+            <div class="room-id" id="lobbyRoomId" onclick="navigator.clipboard.writeText(this.innerText); alert('Room ID Copied!');">CONNECTING...</div>
+            <ul class="player-list" id="lobbyPlayerList">
+                <li>Player 1 (Host)</li>
+            </ul>
+        </div>
+        <div class="btn-row" style="margin-bottom: 20px;">
+            <button class="btn btn-settings" onclick="showSettingsMenu('lobby')" id="lobbySettingsBtn">⚙️ Match Settings</button>
+        </div>
+        <button class="btn btn-active" id="lobbyStartBtn" onclick="startMultiplayerGame()" disabled>Start Game</button>
+        <button class="btn btn-aggro btn-small" onclick="disconnectMultiplayer()">Disconnect</button>
+    </div>
+
+    <div id="settingsMenu" class="overlay" style="display: none;">
+        <h1 id="settingsTitle">SETTINGS</h1>
+        <div class="settings-container">
+            
+            <div class="settings-col" id="colPhysics">
+                <h2>Game Physics</h2>
+                <label>Tank Speed: <span id="tsVal">2.5</span><input type="range" id="optTankSpeed" min="1" max="5" value="2.5" step="0.5" oninput="document.getElementById('tsVal').innerText=this.value; syncSettingsIfMP();"></label>
+                <label>Rotation Speed: <span id="rsVal">0.035</span><input type="range" id="optRotSpeed" min="0.01" max="0.10" value="0.035" step="0.005" oninput="document.getElementById('rsVal').innerText=this.value; syncSettingsIfMP();"></label>
+                <label>Bullet Speed: <span id="bsVal">4.5</span><input type="range" id="optBulletSpeed" min="2" max="10" value="4.5" step="0.5" oninput="document.getElementById('bsVal').innerText=this.value; syncSettingsIfMP();"></label>
+                <label>Bullet Bounces: <span id="bbVal">5</span><input type="range" id="optBulletBounces" min="1" max="20" value="5" step="1" oninput="document.getElementById('bbVal').innerText=this.value; syncSettingsIfMP();"></label>
+                <label>Infinite Bullets: <input type="checkbox" id="optBulletInfinite" onchange="document.getElementById('optBulletBounces').disabled = this.checked; syncSettingsIfMP();"></label>
+            </div>
+            
+            <div class="settings-col" id="colLocalPrefs">
+                <h2>Player Colors</h2>
+                <label>P1 Color: <button id="c1" class="btn-color" onclick="cycleColor(0)">Blue</button></label>
+                <label>P2/Bot Color: <button id="c2" class="btn-color" onclick="cycleColor(1)">Red</button></label>
+                <label>P3 Color: <button id="c3" class="btn-color" onclick="cycleColor(2)">Green</button></label>
+                <label>P4 Color: <button id="c4" class="btn-color" onclick="cycleColor(3)">Yellow</button></label>
+                
+                <label style="border-top: 1px solid #444; padding-top: 10px; margin-top: 5px; color: #0088ff;">Fullscreen Map: <input type="checkbox" id="optFullscreenMap" checked></label>
+                
+                <h2 style="margin-top: 15px;">Controls</h2>
+                <button class="btn btn-settings" style="width: 100%; font-size: 16px; padding: 10px; margin: 0;" onclick="showControlsMenu(settingsSource)">🎮 Customize</button>
+            </div>
+
+            <div class="settings-col" id="colMatchRules">
+                <h2>Match Settings</h2>
+                <label>Wins to Match: 
+                    <div style="display:flex; align-items:center; gap:10px;" id="winsControlGroup">
+                        <button class="btn btn-settings" style="width:32px; height:32px; padding:0; margin:0; display:flex; align-items:center; justify-content:center;" onclick="adjWins(-1)">-</button>
+                        <span id="winsVal" style="width: 20px; text-align: center;">5</span>
+                        <button class="btn btn-settings" style="width:32px; height:32px; padding:0; margin:0; display:flex; align-items:center; justify-content:center;" onclick="adjWins(1)">+</button>
+                    </div>
+                </label>
+                <label>Endless Mode: <input type="checkbox" id="optEndless" onchange="document.getElementById('winsControlGroup').style.opacity = this.checked ? '0.3' : '1'; document.getElementById('winsControlGroup').style.pointerEvents = this.checked ? 'none' : 'auto'; syncSettingsIfMP();"></label>
+                
+                <div id="hostSettingsToggle" style="display:none; margin-top:15px; background:#331111; padding:10px; border-radius:8px; border: 1px solid #ff3333;">
+                    <label style="color:#ff8888; font-size:14px;">Allow Clients to Edit Tank Physics: <input type="checkbox" id="optAllowClientSettings" onchange="syncSettingsIfMP()"></label>
+                </div>
+            </div>
+        </div>
+        <div class="btn-row">
+            <button class="btn btn-passive btn-small" style="width: 160px;" onclick="resetDefaults()">Reset Defaults</button>
+            <button class="btn btn-back btn-small" onclick="saveSettings()">Save & Back</button>
+        </div>
+    </div>
+
+    <div id="controlsMenu" class="overlay" style="display: none;">
+        <h1 style="margin-top: 0; margin-bottom: 10px; font-size: 48px; padding-top: 10px;">CONTROLS</h1>
+        <div class="settings-container" style="max-width: 1200px; padding: 25px; overflow-x: hidden; background: #222;">
+            <div style="display: flex; flex-direction: row; gap: 20px; justify-content: center; width: 100%; flex-wrap: wrap;" id="controlsCardsArea">
+                <div class="player-card">
+                    <h2 style="color: #0088ff;">P1 Controls</h2>
+                    <label>Up: <input type="text" id="p1u" value="KeyW" readonly class="keybind"></label>
+                    <label>Down: <input type="text" id="p1d" value="KeyS" readonly class="keybind"></label>
+                    <label>Left: <input type="text" id="p1l" value="KeyA" readonly class="keybind"></label>
+                    <label>Right: <input type="text" id="p1r" value="KeyD" readonly class="keybind"></label>
+                    <label>Shoot: <input type="text" id="p1s" value="KeyQ" readonly class="keybind"></label>
+                    <label class="rot-label">Rotation: <input type="checkbox" id="p1rot" checked></label>
+                    <button class="btn btn-passive btn-micro" onclick="resetPlayer(1)">Set to Default</button>
+                </div>
+                <div class="player-card">
+                    <h2 style="color: #ff3333;">P2 Controls</h2>
+                    <label>Up: <input type="text" id="p2u" value="ArrowUp" readonly class="keybind"></label>
+                    <label>Down: <input type="text" id="p2d" value="ArrowDown" readonly class="keybind"></label>
+                    <label>Left: <input type="text" id="p2l" value="ArrowLeft" readonly class="keybind"></label>
+                    <label>Right: <input type="text" id="p2r" value="ArrowRight" readonly class="keybind"></label>
+                    <label>Shoot: <input type="text" id="p2s" value="Enter" readonly class="keybind"></label>
+                    <label class="rot-label">Rotation: <input type="checkbox" id="p2rot" checked></label>
+                    <button class="btn btn-passive btn-micro" onclick="resetPlayer(2)">Set to Default</button>
+                </div>
+                <div class="player-card">
+                    <h2 style="color: #00cc44;">P3 Controls</h2>
+                    <label>Up: <input type="text" id="p3u" value="KeyI" readonly class="keybind"></label>
+                    <label>Down: <input type="text" id="p3d" value="KeyK" readonly class="keybind"></label>
+                    <label>Left: <input type="text" id="p3l" value="KeyJ" readonly class="keybind"></label>
+                    <label>Right: <input type="text" id="p3r" value="KeyL" readonly class="keybind"></label>
+                    <label>Shoot: <input type="text" id="p3s" value="KeyU" readonly class="keybind"></label>
+                    <label class="rot-label">Rotation: <input type="checkbox" id="p3rot" checked></label>
+                    <button class="btn btn-passive btn-micro" onclick="resetPlayer(3)">Set to Default</button>
+                </div>
+                <div class="player-card">
+                    <h2 style="color: #ffcc00;">P4 Controls</h2>
+                    <label>Up: <input type="text" id="p4u" value="Numpad8" readonly class="keybind"></label>
+                    <label>Down: <input type="text" id="p4d" value="Numpad5" readonly class="keybind"></label>
+                    <label>Left: <input type="text" id="p4l" value="Numpad4" readonly class="keybind"></label>
+                    <label>Right: <input type="text" id="p4r" value="Numpad6" readonly class="keybind"></label>
+                    <label>Shoot: <input type="text" id="p4s" value="Numpad0" readonly class="keybind"></label>
+                    <label class="rot-label">Rotation: <input type="checkbox" id="p4rot" checked></label>
+                    <button class="btn btn-passive btn-micro" onclick="resetPlayer(4)">Set to Default</button>
+                </div>
+            </div>
+            <div class="keyboard-wrapper">
+                <div id="bindInstruction">Click an input box above to start binding...</div>
+                <div id="keyboardRenderArea"></div>
+            </div>
+        </div>
+        <div class="btn-row" style="margin-top: 15px;">
+            <button class="btn btn-passive btn-small" onclick="resetAllControls()">Reset All</button>
+            <button class="btn btn-back btn-small" onclick="backToSettings()">Done</button>
+        </div>
+    </div>
+
+    <div id="pauseMenu" class="overlay" style="display: none; z-index: 20;">
+        <h1>PAUSED</h1>
+        <div id="pauseScoreBoard" style="display: flex; gap: 30px; margin-bottom: 25px; font-size: 32px; font-weight: bold; background: rgba(0,0,0,0.6); padding: 15px 30px; border-radius: 12px; border: 2px solid #555;"></div>
+        <button class="btn" onclick="togglePause()">Resume</button>
+        <button class="btn btn-settings" onclick="showSettingsMenu('pause')">⚙️ Settings</button>
+        <button class="btn btn-aggro" onclick="quitToMenu()">Quit to Menu</button>
+    </div>
+
+    <div id="gameContainer">
+        <div class="ui" id="scoreBoard"></div>
+        <canvas id="game"></canvas>
+    </div>
+
+<script>
+// --- CANVAS & GLOBALS ---
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+canvas.width = 1200; canvas.height = 800;
+
+const keys = {};
+window.activeBindInput = null; 
+window.onkeydown = (e) => {
+    if (window.activeBindInput) return;
+    keys[e.code] = true;
+    if (e.code === 'Escape') {
+        if (document.getElementById('controlsMenu').style.display === 'flex') backToSettings();
+        else if (document.getElementById('settingsMenu').style.display === 'flex') saveSettings();
+        else if (isPlaying && !isOnlineMode) togglePause();
+    }
+};
+window.onkeyup = (e) => keys[e.code] = false;
+
+let players = []; let isPlaying = false; let isPaused = false; let shake = 0; let walls = []; let particles = [];
+
+// --- SETTINGS GLOBALS ---
+let confTankSpeed = 2.5; let confBulletSpeed = 4.5; let confBulletBounces = 5; let confBulletInfinite = false;
+let confRotSpeed = 0.035; let confFullscreenMap = true; let confMaxWins = 5; let confEndless = false;
+let settingsSource = 'root'; 
+
+// --- MULTIPLAYER GLOBALS ---
+let isOnlineMode = false; let isHost = false; let myPeer = null; let mpConns = []; 
+let mpPlayersList = [{id: 'host', name: 'Player 1 (Host)'}]; 
+
+// --- MENU NAVIGATION UTILS ---
+function hideAllMenus() {
+    document.querySelectorAll('.overlay').forEach(el => el.style.display = 'none');
+    document.getElementById('cornerSettingsBtn').style.display = 'none';
+}
+function showMenu(menuId) {
+    hideAllMenus();
+    document.getElementById(menuId).style.display = 'flex';
+    if(menuId === 'mainMenu' || menuId === 'rootMenu') document.getElementById('cornerSettingsBtn').style.display = 'flex';
+}
+function showDifficultyMenu() { showMenu('diffMenu'); }
+
+// --- SETTINGS MENU LOGIC ---
+function showSettingsMenu(source) {
+    settingsSource = source; 
+    hideAllMenus();
+    document.getElementById('settingsMenu').style.display = 'flex';
+    document.getElementById('settingsTitle').innerText = (source === 'lobby') ? "MATCH SETTINGS" : "GLOBAL SETTINGS";
+
+    // Dynamic UI Rules
+    if(isOnlineMode && !isHost) {
+        let allowEdit = document.getElementById('optAllowClientSettings').checked;
+        document.getElementById('colMatchRules').style.display = 'none'; // Completely hides rules for clients
+        document.getElementById('colPhysics').style.display = allowEdit ? 'flex' : 'none'; // Hides physics if not allowed
+    } else {
+        document.getElementById('colMatchRules').style.display = 'flex';
+        document.getElementById('colPhysics').style.display = 'flex';
+    }
+    
+    document.getElementById('hostSettingsToggle').style.display = (isOnlineMode && isHost) ? 'block' : 'none';
+}
+
+function showControlsMenu(source) { hideAllMenus(); document.getElementById('controlsMenu').style.display = 'flex'; generateKeyboardMap(); }
+
+function backToSettings() { 
+    if (window.activeBindInput) { 
+        window.activeBindInput.value = window.activeBindInput.dataset.oldValue; window.activeBindInput.style.borderColor = '#555'; window.activeBindInput.style.backgroundColor = '#111';
+        window.removeEventListener('keydown', window.currentKeyHandler); window.activeBindInput = null;
+        document.getElementById('bindInstruction').innerText = 'Click an input box above to start binding...';
+    }
+    hideAllMenus(); document.getElementById('settingsMenu').style.display = 'flex'; 
+}
+
+function saveSettings() {
+    confTankSpeed = parseFloat(document.getElementById('optTankSpeed').value);
+    confRotSpeed = parseFloat(document.getElementById('optRotSpeed').value);
+    confBulletSpeed = parseFloat(document.getElementById('optBulletSpeed').value);
+    confBulletBounces = parseInt(document.getElementById('optBulletBounces').value);
+    confBulletInfinite = document.getElementById('optBulletInfinite').checked;
+    confFullscreenMap = document.getElementById('optFullscreenMap').checked;
+    confEndless = document.getElementById('optEndless').checked;
+    
+    let gc = document.getElementById('gameContainer');
+    if(gc) { gc.className = confFullscreenMap ? 'map-fullscreen' : 'map-fixed'; if (gc.style.display !== 'none') gc.style.display = confFullscreenMap ? 'block' : 'flex'; }
+
+    if (isPlaying && players.length > 0) {
+        players[0].color = colorPalette[playerColorIndexes[0]].hex; players[0].controls = { up: document.getElementById('p1u').value, down: document.getElementById('p1d').value, left: document.getElementById('p1l').value, right: document.getElementById('p1r').value, shoot: document.getElementById('p1s').value }; players[0].useRotation = document.getElementById('p1rot').checked;
+        if (players.length >= 2 && !players[1].botMode) { players[1].color = colorPalette[playerColorIndexes[1]].hex; players[1].controls = { up: document.getElementById('p2u').value, down: document.getElementById('p2d').value, left: document.getElementById('p2l').value, right: document.getElementById('p2r').value, shoot: document.getElementById('p2s').value }; players[1].useRotation = document.getElementById('p2rot').checked; }
+        if (players.length >= 3 && !players[2].botMode) { players[2].color = colorPalette[playerColorIndexes[2]].hex; players[2].controls = { up: document.getElementById('p3u').value, down: document.getElementById('p3d').value, left: document.getElementById('p3l').value, right: document.getElementById('p3r').value, shoot: document.getElementById('p3s').value }; players[2].useRotation = document.getElementById('p3rot').checked; }
+        if (players.length >= 4 && !players[3].botMode) { players[3].color = colorPalette[playerColorIndexes[3]].hex; players[3].controls = { up: document.getElementById('p4u').value, down: document.getElementById('p4d').value, left: document.getElementById('p4l').value, right: document.getElementById('p4r').value, shoot: document.getElementById('p4s').value }; players[3].useRotation = document.getElementById('p4rot').checked; }
+        updateScoreBoard();
+    }
+
+    if (isOnlineMode) syncSettingsIfMP();
+
+    if (settingsSource === 'pause') showMenu('pauseMenu');
+    else if (settingsSource === 'lobby') showMenu('lobbyMenu');
+    else showMenu(settingsSource === 'main' ? 'mainMenu' : 'rootMenu');
+}
+
+function adjWins(delta) { confMaxWins += delta; if (confMaxWins < 1) confMaxWins = 1; if (confMaxWins > 20) confMaxWins = 20; document.getElementById('winsVal').innerText = confMaxWins; syncSettingsIfMP(); }
+
+// --- PEER JS MULTIPLAYER LOGIC ---
+function generateRoomId() { return Math.random().toString(36).substr(2, 5).toUpperCase(); }
+
+function hostRoom() {
+    isOnlineMode = true; isHost = true; showMenu('lobbyMenu');
+    document.getElementById('lobbyRoomId').innerText = "CREATING ROOM..."; document.getElementById('lobbyRoleText').innerText = "HOST (You)"; document.getElementById('lobbyStartBtn').style.display = "inline-block"; document.getElementById('hostSettingsToggle').style.display = "block";
+    let roomId = generateRoomId(); myPeer = new Peer('wii-trouble-' + roomId);
+    myPeer.on('open', function(id) { document.getElementById('lobbyRoomId').innerText = roomId; mpPlayersList = [{id: myPeer.id, name: 'Player 1 (Host)'}]; updateLobbyUI(); });
+    myPeer.on('connection', function(conn) {
+        if(mpConns.length >= 3) { conn.send({type: 'error', msg: 'Room Full'}); setTimeout(()=>conn.close(), 500); return; }
+        mpConns.push(conn); conn.on('data', function(data) { handleNetworkData(data, conn); });
+        conn.on('open', function() { mpPlayersList.push({id: conn.peer, name: `Player ${mpPlayersList.length + 1}`}); broadcastLobbyState(); sendSettingsTo(conn); });
+        conn.on('close', function() { mpConns = mpConns.filter(c => c !== conn); mpPlayersList = mpPlayersList.filter(p => p.id !== conn.peer); broadcastLobbyState(); });
+    });
+}
+
+function joinRoom() {
+    let rawId = document.getElementById('joinInput').value.trim().toUpperCase(); if(!rawId) return;
+    document.getElementById('joinStatus').innerText = "Connecting..."; isOnlineMode = true; isHost = false; myPeer = new Peer();
+    myPeer.on('open', function(id) {
+        let conn = myPeer.connect('wii-trouble-' + rawId); mpConns = [conn];
+        conn.on('open', function() { document.getElementById('joinStatus').innerText = ""; showMenu('lobbyMenu'); document.getElementById('lobbyRoleText').innerText = "CLIENT (Connected)"; document.getElementById('lobbyRoomId').innerText = rawId; document.getElementById('lobbyStartBtn').style.display = "none"; document.getElementById('hostSettingsToggle').style.display = "none"; });
+        conn.on('data', function(data) { handleNetworkData(data, conn); }); conn.on('close', function() { alert("Connection to Host lost."); disconnectMultiplayer(); });
+    });
+}
+
+function disconnectMultiplayer() { if(myPeer) myPeer.destroy(); isOnlineMode = false; isHost = false; mpConns = []; showMenu('rootMenu'); }
+
+function broadcastLobbyState() { mpConns.forEach(c => c.send({ type: 'lobby_update', players: mpPlayersList })); updateLobbyUI(); }
+
+function updateLobbyUI() {
+    let list = document.getElementById('lobbyPlayerList'); list.innerHTML = '';
+    mpPlayersList.forEach((p, i) => { let li = document.createElement('li'); li.innerText = p.name; if(p.id === (myPeer ? myPeer.id : null)) li.innerText += " (You)"; list.appendChild(li); });
+    document.getElementById('lobbyStartBtn').disabled = mpPlayersList.length < 2; 
+}
+
+function syncSettingsIfMP() {
+    if(!isOnlineMode) return;
+    let sData = {
+        type: 'settings_update', isHost: isHost,
+        tankSpeed: document.getElementById('optTankSpeed').value, rotSpeed: document.getElementById('optRotSpeed').value, bulletSpeed: document.getElementById('optBulletSpeed').value, bulletBounces: document.getElementById('optBulletBounces').value, bulletInfinite: document.getElementById('optBulletInfinite').checked,
+        wins: confMaxWins, endless: document.getElementById('optEndless').checked, allowEdit: document.getElementById('optAllowClientSettings').checked
+    };
+    mpConns.forEach(c => c.send(sData));
+}
+
+function sendSettingsTo(conn) {
+    conn.send({
+        type: 'settings_update', isHost: isHost,
+        tankSpeed: document.getElementById('optTankSpeed').value, rotSpeed: document.getElementById('optRotSpeed').value, bulletSpeed: document.getElementById('optBulletSpeed').value, bulletBounces: document.getElementById('optBulletBounces').value, bulletInfinite: document.getElementById('optBulletInfinite').checked,
+        wins: confMaxWins, endless: document.getElementById('optEndless').checked, allowEdit: document.getElementById('optAllowClientSettings').checked
+    });
+}
+
+function applyReceivedSettings(data) {
+    // If you are the Host and receiving a network packet from a Client
+    if (isHost && !data.isHost) {
+        if (!document.getElementById('optAllowClientSettings').checked) return; // Ignore if permissions are locked
+        
+        // Host accepts ONLY physics tweaks from the Client, rejecting Game Rule hacks
+        document.getElementById('optTankSpeed').value = data.tankSpeed; document.getElementById('tsVal').innerText = data.tankSpeed;
+        document.getElementById('optRotSpeed').value = data.rotSpeed; document.getElementById('rsVal').innerText = data.rotSpeed;
+        document.getElementById('optBulletSpeed').value = data.bulletSpeed; document.getElementById('bsVal').innerText = data.bulletSpeed;
+        document.getElementById('optBulletBounces').value = data.bulletBounces; document.getElementById('bbVal').innerText = data.bulletBounces;
+        document.getElementById('optBulletInfinite').checked = data.bulletInfinite; document.getElementById('optBulletBounces').disabled = data.bulletInfinite;
+        return; 
+    }
+
+    // If you are the Client receiving rules from the Host
+    document.getElementById('optTankSpeed').value = data.tankSpeed; document.getElementById('tsVal').innerText = data.tankSpeed;
+    document.getElementById('optRotSpeed').value = data.rotSpeed; document.getElementById('rsVal').innerText = data.rotSpeed;
+    document.getElementById('optBulletSpeed').value = data.bulletSpeed; document.getElementById('bsVal').innerText = data.bulletSpeed;
+    document.getElementById('optBulletBounces').value = data.bulletBounces; document.getElementById('bbVal').innerText = data.bulletBounces;
+    document.getElementById('optBulletInfinite').checked = data.bulletInfinite; document.getElementById('optBulletBounces').disabled = data.bulletInfinite;
+    confMaxWins = data.wins; document.getElementById('winsVal').innerText = data.wins;
+    document.getElementById('optEndless').checked = data.endless;
+    document.getElementById('optAllowClientSettings').checked = data.allowEdit;
+    
+    // Update menu visuals instantly if a Client is currently looking at it
+    if(!isHost && document.getElementById('settingsMenu').style.display === 'flex') showSettingsMenu('lobby'); 
+}
+
+function handleNetworkData(data, conn) {
+    if(data.type === 'lobby_update') { mpPlayersList = data.players; updateLobbyUI(); }
+    else if(data.type === 'settings_update') { applyReceivedSettings(data); }
+    else if(data.type === 'start_game') { alert("Host started the game! (Multiplayer Game Loop Hook Ready)"); }
+}
+
+function startMultiplayerGame() { if(!isHost) return; mpConns.forEach(c => c.send({type: 'start_game'})); alert("Starting multiplayer... (Next Phase Implementation)"); }
+
+
+// --- PLAYER DEFAULT CONTROLS & COLORS ---
+const defaultControls = { 1: { u: 'KeyW', d: 'KeyS', l: 'KeyA', r: 'KeyD', s: 'KeyQ', rot: true }, 2: { u: 'ArrowUp', d: 'ArrowDown', l: 'ArrowLeft', r: 'ArrowRight', s: 'Enter', rot: true }, 3: { u: 'KeyI', d: 'KeyK', l: 'KeyJ', r: 'KeyL', s: 'KeyU', rot: true }, 4: { u: 'Numpad8', d: 'Numpad5', l: 'Numpad4', r: 'Numpad6', s: 'Numpad0', rot: true } };
+const colorPalette = [ { hex: '#0088ff', name: 'Blue' }, { hex: '#ff3333', name: 'Red' }, { hex: '#00cc44', name: 'Green' }, { hex: '#ffcc00', name: 'Yellow' }, { hex: '#ff8800', name: 'Orange' }, { hex: '#00ffff', name: 'Cyan' }, { hex: '#ff00ff', name: 'Magenta' }, { hex: '#ff88cc', name: 'Pink' }, { hex: '#ffffff', name: 'White' } ];
+let playerColorIndexes = [0, 1, 2, 3]; 
+
+function updateColorUI(pIndex) {
+    const btn = document.getElementById(`c${pIndex + 1}`); const color = colorPalette[playerColorIndexes[pIndex]];
+    btn.style.backgroundColor = color.hex; btn.innerText = color.name;
+    btn.style.color = (color.name === 'White' || color.name === 'Yellow' || color.name === 'Cyan') ? 'black' : 'white';
+    btn.style.textShadow = (color.name === 'White' || color.name === 'Yellow' || color.name === 'Cyan') ? 'none' : '1px 1px 2px black';
+    if(document.getElementById('controlsMenu').style.display === 'flex') generateKeyboardMap();
+}
+function cycleColor(pIndex) { playerColorIndexes[pIndex] = (playerColorIndexes[pIndex] + 1) % colorPalette.length; updateColorUI(pIndex); }
+for (let i = 0; i < 4; i++) updateColorUI(i);
+
+// --- KEYBINDING & KEYBOARD MAP ---
+document.querySelectorAll('.keybind').forEach(input => {
+    input.addEventListener('click', function() {
+        if (window.activeBindInput) { window.activeBindInput.value = window.activeBindInput.dataset.oldValue; window.activeBindInput.style.borderColor = '#555'; window.activeBindInput.style.backgroundColor = '#111'; window.removeEventListener('keydown', window.currentKeyHandler); }
+        window.activeBindInput = this; this.dataset.oldValue = this.value; this.value = 'Press/Click...'; this.style.borderColor = '#0088ff'; this.style.backgroundColor = '#002244';
+        document.getElementById('bindInstruction').innerText = `Assigning key for ${this.parentElement.parentElement.querySelector('h2').innerText} ${this.parentElement.innerText.split(':')[0]}...`;
+        const keyHandler = (e) => { e.preventDefault(); finalizeBind(e.code); }; window.currentKeyHandler = keyHandler; window.addEventListener('keydown', keyHandler);
+    });
+});
+function finalizeBind(code) {
+    if (!window.activeBindInput) return;
+    window.activeBindInput.value = code; window.activeBindInput.style.borderColor = '#555'; window.activeBindInput.style.backgroundColor = '#111';
+    window.removeEventListener('keydown', window.currentKeyHandler); window.activeBindInput = null;
+    document.getElementById('bindInstruction').innerText = 'Click an input box above to start binding...'; generateKeyboardMap(); 
+}
+
+function generateKeyboardMap() {
+    const renderArea = document.getElementById('keyboardRenderArea'); renderArea.innerHTML = ''; let keyColors = {};
+    for (let i = 1; i <= 4; i++) { let hexColor = colorPalette[playerColorIndexes[i-1]].hex; ['u', 'd', 'l', 'r', 's'].forEach(dir => { keyColors[document.getElementById(`p${i}${dir}`).value] = hexColor; }); }
+    const mainLayout = [ [{code: 'Backquote', label: '\\'}, {code: 'Digit1', label: '1'}, {code: 'Digit2', label: '2'}, {code: 'Digit3', label: '3'}, {code: 'Digit4', label: '4'}, {code: 'Digit5', label: '5'}, {code: 'Digit6', label: '6'}, {code: 'Digit7', label: '7'}, {code: 'Digit8', label: '8'}, {code: 'Digit9', label: '9'}, {code: 'Digit0', label: '0'}, {code: 'Minus', label: '\''}, {code: 'Equal', label: 'ì'}, {code: 'Backspace', label: 'Back', cls: 'k-backspace'}], [{code: 'Tab', label: 'Tab', cls: 'k-tab'}, {code: 'KeyQ', label: 'Q'}, {code: 'KeyW', label: 'W'}, {code: 'KeyE', label: 'E'}, {code: 'KeyR', label: 'R'}, {code: 'KeyT', label: 'T'}, {code: 'KeyY', label: 'Y'}, {code: 'KeyU', label: 'U'}, {code: 'KeyI', label: 'I'}, {code: 'KeyO', label: 'O'}, {code: 'KeyP', label: 'P'}, {code: 'BracketLeft', label: 'è'}, {code: 'BracketRight', label: '+'}, {code: 'Enter', label: 'Invio', cls: 'k-enter-top'}], [{code: 'CapsLock', label: 'Bloc\nMaiusc', cls: 'k-caps'}, {code: 'KeyA', label: 'A'}, {code: 'KeyS', label: 'S'}, {code: 'KeyD', label: 'D'}, {code: 'KeyF', label: 'F'}, {code: 'KeyG', label: 'G'}, {code: 'KeyH', label: 'H'}, {code: 'KeyJ', label: 'J'}, {code: 'KeyK', label: 'K'}, {code: 'KeyL', label: 'L'}, {code: 'Semicolon', label: 'ò'}, {code: 'Quote', label: 'à'}, {code: 'Backslash', label: 'ù'}, {code: 'Enter', label: '', cls: 'k-enter-bot'}], [{code: 'ShiftLeft', label: 'Maiusc', cls: 'k-shift-l'}, {code: 'IntlBackslash', label: '<'}, {code: 'KeyZ', label: 'Z'}, {code: 'KeyX', label: 'X'}, {code: 'KeyC', label: 'C'}, {code: 'KeyV', label: 'V'}, {code: 'KeyB', label: 'B'}, {code: 'KeyN', label: 'N'}, {code: 'KeyM', label: 'M'}, {code: 'Comma', label: ','}, {code: 'Period', label: '.'}, {code: 'Slash', label: '-'}, {code: 'ShiftRight', label: 'Maiusc', cls: 'k-shift-r'}], [{code: 'ControlLeft', label: 'Ctrl', cls: 'k-ctrl'}, {code: 'MetaLeft', label: 'Win', cls: 'k-mod'}, {code: 'AltLeft', label: 'Alt', cls: 'k-mod'}, {code: 'Space', label: 'Spazio', cls: 'k-space'}, {code: 'AltRight', label: 'Alt Gr', cls: 'k-mod'}, {code: 'MetaRight', label: 'Win', cls: 'k-mod'}, {code: 'ContextMenu', label: 'Menu', cls: 'k-mod'}, {code: 'ControlRight', label: 'Ctrl', cls: 'k-ctrl'}] ];
+    const navLayout = [ [{code: 'Insert', label: 'Ins'}, {code: 'Home', label: 'Home'}, {code: 'PageUp', label: 'Pg↑'}], [{code: 'Delete', label: 'Canc'}, {code: 'End', label: 'End'}, {code: 'PageDown', label: 'Pg↓'}], [{code: 'Empty', label: ''}, {code: 'Empty', label: ''}, {code: 'Empty', label: ''}], [{code: 'Empty', label: ''}, {code: 'ArrowUp', label: '↑'}, {code: 'Empty', label: ''}], [{code: 'ArrowLeft', label: '←'}, {code: 'ArrowDown', label: '↓'}, {code: 'ArrowRight', label: '→'}] ];
+    const numpadFlatLayout = [ {code: 'NumLock', label: 'Num'}, {code: 'NumpadDivide', label: '/'}, {code: 'NumpadMultiply', label: '*'}, {code: 'NumpadSubtract', label: '-'}, {code: 'Numpad7', label: '7'}, {code: 'Numpad8', label: '8'}, {code: 'Numpad9', label: '9'}, {code: 'NumpadAdd', label: '+', cls: 'k-num-plus'}, {code: 'Numpad4', label: '4'}, {code: 'Numpad5', label: '5'}, {code: 'Numpad6', label: '6'}, {code: 'Numpad1', label: '1'}, {code: 'Numpad2', label: '2'}, {code: 'Numpad3', label: '3'}, {code: 'NumpadEnter', label: 'Invio', cls: 'k-num-enter'}, {code: 'Numpad0', label: '0', cls: 'k-num-zero'}, {code: 'NumpadDecimal', label: '.'} ];
+    function createSection(layoutArray, isGrid = false, extraClass = '') { let sectionDiv = document.createElement('div'); sectionDiv.className = 'keyboard-section ' + extraClass; let arr = isGrid ? layoutArray : layoutArray.flat(); if (isGrid) { arr.forEach(keyObj => renderKey(keyObj, sectionDiv)); } else { layoutArray.forEach(row => { let rowDiv = document.createElement('div'); rowDiv.className = 'keyboard-row'; row.forEach(keyObj => renderKey(keyObj, rowDiv)); sectionDiv.appendChild(rowDiv); }); } return sectionDiv; }
+    function renderKey(keyObj, parentElement) {
+        let keyDiv = document.createElement('div'); keyDiv.className = 'key-box'; if (keyObj.cls) keyObj.cls.split(' ').forEach(c => keyDiv.classList.add(c));
+        if (keyObj.code === 'Empty') { keyDiv.classList.add('key-empty'); } else {
+            keyDiv.innerText = keyObj.label; keyDiv.dataset.code = keyObj.code;
+            keyDiv.onmouseenter = () => document.querySelectorAll(`.key-box[data-code="${keyObj.code}"]`).forEach(el => el.classList.add('key-hover')); keyDiv.onmouseleave = () => document.querySelectorAll(`.key-box[data-code="${keyObj.code}"]`).forEach(el => el.classList.remove('key-hover')); keyDiv.onclick = () => { if (window.activeBindInput) finalizeBind(keyObj.code); };
+            if (keyColors[keyObj.code]) { keyDiv.classList.add('bound-key'); keyDiv.style.backgroundColor = keyColors[keyObj.code]; keyDiv.style.borderColor = 'white'; if (keyObj.cls && keyObj.cls.includes('k-enter-top')) keyDiv.style.borderBottomColor = 'transparent'; if (keyObj.cls && keyObj.cls.includes('k-enter-bot')) keyDiv.style.borderTopColor = 'transparent'; const isBright = ['#ffffff', '#ffcc00', '#00ffff'].includes(keyColors[keyObj.code]); keyDiv.style.color = isBright ? 'black' : 'white'; keyDiv.style.textShadow = isBright ? 'none' : '1px 1px 2px black'; }
+        } parentElement.appendChild(keyDiv);
+    }
+    renderArea.appendChild(createSection(mainLayout, false, '')); renderArea.appendChild(createSection(navLayout, false, '')); renderArea.appendChild(createSection(numpadFlatLayout, true, 'numpad-grid'));
+}
+function resetPlayer(p) { document.getElementById(`p${p}u`).value = defaultControls[p].u; document.getElementById(`p${p}d`).value = defaultControls[p].d; document.getElementById(`p${p}l`).value = defaultControls[p].l; document.getElementById(`p${p}r`).value = defaultControls[p].r; document.getElementById(`p${p}s`).value = defaultControls[p].s; document.getElementById(`p${p}rot`).checked = defaultControls[p].rot; generateKeyboardMap(); }
+function resetAllControls() { for (let i = 1; i <= 4; i++) resetPlayer(i); }
+function resetDefaults() {
+    document.getElementById('optTankSpeed').value = 2.5; document.getElementById('tsVal').innerText = "2.5"; document.getElementById('optRotSpeed').value = 0.035; document.getElementById('rsVal').innerText = "0.035"; document.getElementById('optBulletSpeed').value = 4.5; document.getElementById('bsVal').innerText = "4.5"; document.getElementById('optBulletBounces').value = 5; document.getElementById('bbVal').innerText = "5"; document.getElementById('optBulletBounces').disabled = false; document.getElementById('optBulletInfinite').checked = false; document.getElementById('optFullscreenMap').checked = true; document.getElementById('optAllowClientSettings').checked = false; confRotSpeed = 0.035; confFullscreenMap = true; confMaxWins = 5; document.getElementById('winsVal').innerText = "5"; document.getElementById('optEndless').checked = false; document.getElementById('winsControlGroup').style.opacity = '1'; document.getElementById('winsControlGroup').style.pointerEvents = 'auto';
+    playerColorIndexes = [0, 1, 2, 3]; for (let i = 0; i < 4; i++) updateColorUI(i); resetAllControls(); syncSettingsIfMP();
+}
+
+function togglePause() { isPaused = !isPaused; document.getElementById('pauseMenu').style.display = isPaused ? 'flex' : 'none'; if(isPaused) { document.getElementById('cornerSettingsBtn').style.display = 'none'; let html = ''; players.forEach(p => { html += `<div style="color:${p.color}">${p.name}: ${p.score}</div>`; }); document.getElementById('pauseScoreBoard').innerHTML = html; } }
+function quitToMenu() { isPaused = false; isPlaying = false; hideAllMenus(); document.getElementById('gameContainer').style.display = 'none'; showMenu('rootMenu'); }
+
+// --- LOCAL GAME LOGIC ---
+function generateMap() {
+    walls = []; const cols = 10; const rows = 7; const cellW = canvas.width / cols; const cellH = canvas.height / rows; const t = 12;
+    walls.push({x: 0, y: 0, w: canvas.width, h: t}); walls.push({x: 0, y: canvas.height - t, w: canvas.width, h: t}); walls.push({x: 0, y: 0, w: t, h: canvas.height}); walls.push({x: canvas.width - t, y: 0, w: t, h: canvas.height}); 
+    let vWalls = Array.from({length: cols - 1}, () => Array(rows).fill(true)); let hWalls = Array.from({length: cols}, () => Array(rows - 1).fill(true)); let visited = Array.from({length: cols}, () => Array(rows).fill(false)); let stack = [[0, 0]]; visited[0][0] = true;
+    while (stack.length > 0) {
+        let current = stack.pop(); let cx = current[0]; let cy = current[1]; let neighbors = [];
+        if (cy > 0 && !visited[cx][cy - 1]) neighbors.push({x: cx, y: cy - 1, dir: 'up'}); if (cy < rows - 1 && !visited[cx][cy + 1]) neighbors.push({x: cx, y: cy + 1, dir: 'down'}); if (cx > 0 && !visited[cx - 1][cy]) neighbors.push({x: cx - 1, y: cy, dir: 'left'}); if (cx < cols - 1 && !visited[cx + 1][cy]) neighbors.push({x: cx + 1, y: cy, dir: 'right'});
+        if (neighbors.length > 0) { stack.push(current); let next = neighbors[Math.floor(Math.random() * neighbors.length)]; if (next.dir === 'up') hWalls[cx][cy - 1] = false; else if (next.dir === 'down') hWalls[cx][cy] = false; else if (next.dir === 'left') vWalls[cx - 1][cy] = false; else if (next.dir === 'right') vWalls[cx][cy] = false; visited[next.x][next.y] = true; stack.push([next.x, next.y]); }
+    }
+    for (let x = 0; x < cols - 1; x++) for (let y = 0; y < rows; y++) if (vWalls[x][y] && Math.random() < 0.3) vWalls[x][y] = false; for (let x = 0; x < cols; x++) for (let y = 0; y < rows - 1; y++) if (hWalls[x][y] && Math.random() < 0.3) hWalls[x][y] = false; for (let x = 1; x < cols - 1; x++) { for (let y = 1; y < rows - 1; y++) { if (vWalls[x-1][y-1] && vWalls[x-1][y] && hWalls[x-1][y-1] && hWalls[x][y-1]) { let r = Math.random(); if (r < 0.25) vWalls[x-1][y-1] = false; else if (r < 0.5) vWalls[x-1][y] = false; else if (r < 0.75) hWalls[x-1][y-1] = false; else hWalls[x][y-1] = false; } } }
+    for (let x = 0; x < cols - 1; x++) { for (let y = 0; y < rows; y++) { if (vWalls[x][y]) walls.push({x: (x + 1) * cellW - t/2, y: y * cellH - t/2, w: t, h: cellH + t}); } } for (let x = 0; x < cols; x++) { for (let y = 0; y < rows - 1; y++) { if (hWalls[x][y]) walls.push({x: x * cellW - t/2, y: (y + 1) * cellH - t/2, w: cellW + t, h: t}); } }
+}
+function isPointInWall(px, py) { for (let w of walls) { if (px >= w.x && px <= w.x + w.w && py >= w.y && py <= w.y + w.h) return true; } return false; }
+function hasLineOfSight(x1, y1, x2, y2) { let steps = 30; for(let i = 0; i <= steps; i++) { let px = x1 + (x2 - x1) * (i / steps); let py = y1 + (y2 - y1) * (i / steps); if (isPointInWall(px, py)) return false; } return true; }
+
+class Particle { constructor(x, y, color) { this.x = x; this.y = y; this.color = color; const angle = Math.random() * Math.PI * 2; const speed = Math.random() * 6 + 1; this.vx = Math.cos(angle) * speed; this.vy = Math.sin(angle) * speed; this.life = 1.0; this.decay = Math.random() * 0.03 + 0.02; this.size = Math.random() * 6 + 2; } update() { this.x += this.vx; this.y += this.vy; this.life -= this.decay; } draw() { ctx.globalAlpha = Math.max(0, this.life); ctx.fillStyle = this.color; ctx.fillRect(this.x, this.y, this.size, this.size); ctx.globalAlpha = 1.0; } }
+
+class Tank {
+    constructor(name, x, y, color, controls, useRotation, botMode = null) { this.name = name; this.startX = x; this.startY = y; this.x = x; this.y = y; this.color = color; this.angle = 0; this.radius = 18; this.controls = controls; this.useRotation = useRotation; this.bullets = []; this.cooldown = 0; this.speed = 0; this.score = 0; this.dead = false; this.botMode = botMode; }
+    reset() { this.x = this.startX; this.y = this.startY; this.angle = 0; this.speed = 0; this.bullets = []; this.dead = false; }
+    shoot() { if (this.cooldown <= 0) { this.bullets.push(new Bullet(this.x + Math.cos(this.angle)*25, this.y + Math.sin(this.angle)*25, this.angle)); this.cooldown = (this.botMode === 'aggressive') ? 40 : 60; } }
+    update() {
+        if (this.dead) return; let oldX = this.x; let oldY = this.y;
+        if (this.botMode) {
+            let target = players[0]; if (target && !target.dead) {
+                let targetAngle = Math.atan2(target.y - this.y, target.x - this.x); let angleDiff = targetAngle - this.angle; angleDiff = Math.atan2(Math.sin(angleDiff), Math.cos(angleDiff)); let turnSpeed = this.botMode === 'aggressive' ? Math.max(0.06, confRotSpeed) : (this.botMode === 'passive' ? 0.02 : confRotSpeed); let dist = 40; let frontBlocked = isPointInWall(this.x + Math.cos(this.angle)*dist, this.y + Math.sin(this.angle)*dist); let leftBlocked = isPointInWall(this.x + Math.cos(this.angle - 0.7)*dist, this.y + Math.sin(this.angle - 0.7)*dist); let rightBlocked = isPointInWall(this.x + Math.cos(this.angle + 0.7)*dist, this.y + Math.sin(this.angle + 0.7)*dist);
+                if (frontBlocked) { this.speed = 1.0; if (!leftBlocked) this.angle -= turnSpeed * 1.5; else if (!rightBlocked) this.angle += turnSpeed * 1.5; else { this.speed = -1.5; this.angle += turnSpeed; } } else { if (angleDiff > 0.1) this.angle += turnSpeed; else if (angleDiff < -0.1) this.angle -= turnSpeed; let botMaxSpeed = confTankSpeed * 0.96; this.speed = (this.botMode === 'aggressive') ? botMaxSpeed : (this.botMode === 'passive' ? botMaxSpeed * 0.5 : botMaxSpeed * 0.75); }
+                if (this.botMode !== 'passive' && Math.abs(angleDiff) < 0.4) { if (hasLineOfSight(this.x, this.y, target.x, target.y)) this.shoot(); }
+            } else this.speed = 0; 
+        } else {
+            if (!this.useRotation) { let dx = 0; let dy = 0; if (keys[this.controls.left]) dx -= 1; if (keys[this.controls.right]) dx += 1; if (keys[this.controls.up]) dy -= 1; if (keys[this.controls.down]) dy += 1; if (dx !== 0 || dy !== 0) { this.angle = Math.atan2(dy, dx); this.speed = Math.min(this.speed + 0.6, confTankSpeed); } else { this.speed *= 0.6; } } else { if (keys[this.controls.left]) this.angle -= confRotSpeed; if (keys[this.controls.right]) this.angle += confRotSpeed; if (keys[this.controls.up]) this.speed = Math.min(this.speed + 0.3, confTankSpeed); else if (keys[this.controls.down]) this.speed = Math.max(this.speed - 0.3, -confTankSpeed * 0.8); else this.speed *= 0.85;  }
+            if (keys[this.controls.shoot]) this.shoot();
+        }
+        this.x += Math.cos(this.angle) * this.speed; let hitX = false; walls.forEach(w => { if (this.x + this.radius > w.x && this.x - this.radius < w.x + w.w && this.y + this.radius > w.y && this.y - this.radius < w.y + w.h) hitX = true; }); if (hitX) this.x = oldX; 
+        this.y += Math.sin(this.angle) * this.speed; let hitY = false; walls.forEach(w => { if (this.x + this.radius > w.x && this.x - this.radius < w.x + w.w && this.y + this.radius > w.y && this.y - this.radius < w.y + w.h) hitY = true; }); if (hitY) this.y = oldY; 
+        if (this.cooldown > 0) this.cooldown--;
+    }
+    draw() {
+        if (this.dead) return; ctx.save(); ctx.translate(this.x, this.y); ctx.rotate(this.angle); ctx.fillStyle = "#222"; ctx.fillRect(-22, -22, 44, 12); ctx.fillRect(-22, 10, 44, 12); ctx.fillStyle = this.color; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(-18, -16, 36, 32, 6) : ctx.fillRect(-18, -16, 36, 32); ctx.fill(); ctx.fillStyle = "#333"; ctx.fillRect(0, -4, 32, 8); ctx.fillStyle = this.color; ctx.filter = "brightness(75%)"; ctx.beginPath(); ctx.arc(0, 0, 12, 0, Math.PI * 2); ctx.fill(); ctx.filter = "none"; ctx.restore();
+    }
+}
+
+class Bullet {
+    constructor(x, y, angle) { this.x = x; this.y = y; this.vx = Math.cos(angle) * confBulletSpeed; this.vy = Math.sin(angle) * confBulletSpeed; this.bounces = 0; this.alive = true; }
+    update() { let nextX = this.x + this.vx; let nextY = this.y + this.vy; let bouncedX = false; let bouncedY = false; walls.forEach(w => { if (nextX + 6 > w.x && nextX - 6 < w.x + w.w && this.y + 6 > w.y && this.y - 6 < w.y + w.h) bouncedX = true; if (this.x + 6 > w.x && this.x - 6 < w.x + w.w && nextY + 6 > w.y && nextY - 6 < w.y + w.h) bouncedY = true; }); if (bouncedX) { this.vx *= -1; this.bounces++; nextX = this.x + this.vx; } if (bouncedY) { this.vy *= -1; this.bounces++; nextY = this.y + this.vy; } this.x = nextX; this.y = nextY; if (!confBulletInfinite && this.bounces > confBulletBounces) { this.alive = false; } }
+    draw() { ctx.fillStyle = "#111"; ctx.beginPath(); ctx.arc(this.x, this.y, 6, 0, Math.PI*2); ctx.fill(); ctx.strokeStyle = "rgba(0,0,0,0.3)"; ctx.lineWidth = 2; ctx.stroke(); }
+}
+
+function updateScoreBoard() { let html = ''; players.forEach((p, i) => { html += `<div style="color:${p.color}">${p.name}: <span id="s${i}">${p.score}</span></div>`; }); document.getElementById('scoreBoard').innerHTML = html; }
+
+function startLocalGame(mode) {
+    hideAllMenus(); isOnlineMode = false; const gc = document.getElementById('gameContainer'); gc.className = confFullscreenMap ? 'map-fullscreen' : 'map-fixed'; gc.style.display = confFullscreenMap ? 'block' : 'flex'; players = []; isPaused = false;
+    let col1 = colorPalette[playerColorIndexes[0]].hex; let col2 = colorPalette[playerColorIndexes[1]].hex; let col3 = colorPalette[playerColorIndexes[2]].hex; let col4 = colorPalette[playerColorIndexes[3]].hex;
+    const c1 = { up: document.getElementById('p1u').value, down: document.getElementById('p1d').value, left: document.getElementById('p1l').value, right: document.getElementById('p1r').value, shoot: document.getElementById('p1s').value }; const c2 = { up: document.getElementById('p2u').value, down: document.getElementById('p2d').value, left: document.getElementById('p2l').value, right: document.getElementById('p2r').value, shoot: document.getElementById('p2s').value }; const c3 = { up: document.getElementById('p3u').value, down: document.getElementById('p3d').value, left: document.getElementById('p3l').value, right: document.getElementById('p3r').value, shoot: document.getElementById('p3s').value }; const c4 = { up: document.getElementById('p4u').value, down: document.getElementById('p4d').value, left: document.getElementById('p4l').value, right: document.getElementById('p4r').value, shoot: document.getElementById('p4s').value };
+    const rot1 = document.getElementById('p1rot').checked; const rot2 = document.getElementById('p2rot').checked; const rot3 = document.getElementById('p3rot').checked; const rot4 = document.getElementById('p4rot').checked;
+    players.push(new Tank('PLAYER 1', 60, 60, col1, c1, rot1)); 
+    if (mode.startsWith('bot-')) { players.push(new Tank('BOT', 1140, 740, col2, {}, true, mode.split('-')[1])); } 
+    else { let n = parseInt(mode); if (n >= 2) players.push(new Tank('PLAYER 2', 1140, 740, col2, c2, rot2)); if (n >= 3) players.push(new Tank('PLAYER 3', 1140, 60, col3, c3, rot3)); if (n >= 4) players.push(new Tank('PLAYER 4', 60, 740, col4, c4, rot4)); }
+    updateScoreBoard(); generateMap(); isPlaying = true; requestAnimationFrame(gameLoop);
+}
+
+function checkRoundEnd() {
+    let alivePlayers = players.filter(p => !p.dead);
+    if (alivePlayers.length <= 1) {
+        isPlaying = false; if (alivePlayers.length === 1) { alivePlayers[0].score++; document.getElementById(`s${players.indexOf(alivePlayers[0])}`).innerText = alivePlayers[0].score; }
+        setTimeout(() => { let winner = players.find(p => p.score >= confMaxWins); if (winner && !confEndless) { alert(winner.name + " WINS THE MATCH!"); quitToMenu(); return; } players.forEach(p => p.reset()); generateMap(); particles = []; isPlaying = true; }, 2000);
+    }
+}
+
+function gameLoop() {
+    if (document.getElementById('gameContainer').style.display === 'none' || isOnlineMode) { requestAnimationFrame(gameLoop); return; }
+    ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.save(); if (shake > 0 && !isPaused) { ctx.translate(Math.random() * 12 - 6, Math.random() * 12 - 6); shake--; } ctx.fillStyle = "#333"; walls.forEach(w => ctx.fillRect(w.x, w.y, w.w, w.h));
+    if (!isPaused) { particles.forEach(p => p.update()); particles = particles.filter(p => p.life > 0); } particles.forEach(p => p.draw());
+    players.forEach(tank => {
+        if (!isPaused) tank.update(); tank.draw(); tank.bullets = tank.bullets.filter(b => b.alive);
+        tank.bullets.forEach(b => { if (!isPaused) b.update(); b.draw(); players.forEach(target => { if (!target.dead && isPlaying && !isPaused) { if (Math.hypot(b.x - target.x, b.y - target.y) < target.radius + 4) { target.dead = true; shake = 15; for(let i=0; i<30; i++) { particles.push(new Particle(target.x, target.y, target.color)); particles.push(new Particle(target.x, target.y, '#ffaa00')); } checkRoundEnd(); } } }); });
+    });
+    ctx.restore(); requestAnimationFrame(gameLoop);
+}
+requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>
